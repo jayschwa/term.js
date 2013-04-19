@@ -917,8 +917,7 @@ Terminal.prototype.showCursor = function() {
     this.cursorState = 1;
     this.refresh(this.y, this.y);
   } else {
-    // Temporarily disabled:
-    // this.refreshBlink();
+    this.refreshBlink();
   }
 };
 
