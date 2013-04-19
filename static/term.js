@@ -308,37 +308,19 @@ Terminal.debug = false;
  * Focused Terminal
  */
 
-Terminal.focus = null;
-
 Terminal.prototype.focus = function() {
-  if (Terminal.focus === this) return;
-  if (Terminal.focus) {
-    Terminal.focus.cursorState = 0;
-    Terminal.focus.refresh(Terminal.focus.y, Terminal.focus.y);
-    if (Terminal.focus.sendFocus) Terminal.focus.send('\x1b[O');
-  }
-  Terminal.focus = this;
   if (this.sendFocus) this.send('\x1b[I');
   this.showCursor();
 };
 
 /**
- * Global Events for key handling
+ * Blurred Terminal
  */
 
-Terminal.bindKeys = function() {
-  if (Terminal.focus) return;
-
-  // We could put an "if (Terminal.focus)" check
-  // here, but it shouldn't be necessary.
-  on(document, 'keydown', function(ev) {
-    return Terminal.focus.keyDown(ev);
-  }, true);
-
-  on(document, 'keypress', function(ev) {
-    return Terminal.focus.keyPress(ev);
-  }, true);
-};
+Terminal.prototype.blur = function() {
+  if (this.sendFocus) this.send('\x1b[O');
+  this.hideCursor();
+}
 
 /**
  * Open Terminal
@@ -351,6 +333,7 @@ Terminal.prototype.open = function() {
 
   this.element = document.createElement('div');
   this.element.className = 'terminal';
+  this.element.tabIndex = 0;
   this.children = [];
 
   for (; i < this.rows; i++) {
@@ -361,15 +344,22 @@ Terminal.prototype.open = function() {
 
   this.parentElement.appendChild(this.element);
 
+  on(this.element, 'keydown', function(ev) {
+    return self.keyDown(ev);
+  }, true);
+
+  on(this.element, 'keypress', function(ev) {
+    return self.keyPress(ev);
+  }, true);
+
   this.refresh(0, this.rows - 1);
 
-  Terminal.bindKeys();
-  this.focus();
-
-  this.startBlink();
-
-  on(this.element, 'mousedown', function() {
+  on(this.element, 'focus', function() {
     self.focus();
+  });
+
+  on(this.element, 'blur', function() {
+    self.blur();
   });
 
   // This probably shouldn't work,
@@ -714,7 +704,7 @@ Terminal.prototype.bindMouse = function() {
     }
 
     // bind events
-    if (self.normalMouse) on(document, 'mousemove', sendMove);
+    if (self.normalMouse) on(this.element, 'mousemove', sendMove);
 
     // x10 compatibility mode can't send button releases
     if (!self.x10Mouse) {
@@ -907,7 +897,6 @@ Terminal.prototype.refresh = function(start, end) {
 };
 
 Terminal.prototype.cursorBlink = function() {
-  if (Terminal.focus !== this) return;
   this.cursorState ^= 1;
   this.refresh(this.y, this.y);
 };
@@ -916,9 +905,16 @@ Terminal.prototype.showCursor = function() {
   if (!this.cursorState) {
     this.cursorState = 1;
     this.refresh(this.y, this.y);
-  } else {
-    this.refreshBlink();
   }
+  this.startBlink();
+};
+
+Terminal.prototype.hideCursor = function() {
+  if (this.cursorState) {
+    this.cursorState = 0;
+    this.refresh(this.y, this.y);
+  }
+  this._blink = clearInterval(this._blink);
 };
 
 Terminal.prototype.startBlink = function() {
@@ -927,6 +923,7 @@ Terminal.prototype.startBlink = function() {
   this._blinker = function() {
     self.cursorBlink();
   };
+  clearInterval(this._blink);
   this._blink = setInterval(this._blinker, 500);
 };
 
